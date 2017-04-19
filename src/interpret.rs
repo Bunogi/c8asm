@@ -6,7 +6,7 @@ use instructions::*;
 
 //Returns a string with comments removed, with everything in lowercase
 pub fn sanitize_line(input: &String) -> String {
-	ainput.clone()
+	input.clone() //Please implement me
 }
 
 fn convert_number(input: &str) -> Result<u16, String> {
@@ -43,10 +43,10 @@ fn interpret_ld_instruction(data: &Vec<&str>) -> Result<(CPUInstruction, u16), S
 			}
 		}
 		match data[2] {
-			"dt" => return Ok((CPUInstruction::LD_Vx_DT, 0)),
-			"k" => return Ok((CPUInstruction::LD_K, 0)),
+			"dt"  => return Ok((CPUInstruction::LD_Vx_DT, 0)),
+			"k"   => return Ok((CPUInstruction::LD_K, 0)),
 			"[i]" => return Ok((CPUInstruction::LD_Vx_ADDR_I, 0)),
-			_ => {
+			_     => {
 				let convert = convert_number(&data[1][1..]);
 				match convert {
 					Ok(n) => return Ok((CPUInstruction::LD, n)),
