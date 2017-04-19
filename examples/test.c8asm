@@ -1,0 +1,9 @@
+ld v0, 0x20
+ld v1, 0x30
+ld v2, 20
+ld dt, 0x50
+ld v3, dt
+ld i, 0x5
+ld v4, [i]
+ld [i], 0
+ld v5, [i]
