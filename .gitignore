@@ -1,0 +1,2 @@
+target
+src/main #Neomake likes to make this file when I save main.rs
