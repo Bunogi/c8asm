@@ -6,7 +6,7 @@ use instructions::*;
 //Returns a string with comments removed, with everything in lowercase
 pub fn sanitize_line(input: &mut String){
 	println!("Input: {}", *input);
-	if let Some(i) = input.find(',') { input.remove(i); }
+	while let Some(i) = input.find(',') { input.remove(i); }
 
 	//TODO: remove comments from input
 	input.trim_left();
