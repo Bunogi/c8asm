@@ -5,16 +5,12 @@ use instructions::*;
 
 //Returns a string with comments removed, with everything in lowercase
 pub fn sanitize_line(input: &mut String){
-	let index = match input.find(',') {
-		Some(v) => v,
-		None => 0,
-	};
-
-	if index > 0 {
-		if input.remove(index) != ',' { panic!("Removed wrong comma"); }
-	}
-	//TODO: remove comments from input
 	println!("Input: {}", *input);
+	if let Some(i) = input.find(',') { input.remove(i); }
+
+	//TODO: remove comments from input
+	input.trim_left();
+	input.trim_right();
 	*input = input.to_lowercase();
 }
 
@@ -74,8 +70,7 @@ fn interpret_ld_instruction(data: &Vec<&str>) -> Result<(CPUInstruction, u16), S
 					Err(msg) => return Err(msg),
 				}
 
-				let convert = convert_number(&data[2]);
-				match convert {
+				match convert_number(&data[2]) {
 					Ok(n)    => byte = n & 0x00FF,
 					Err(msg) => return Err(msg),
 				}
@@ -84,8 +79,28 @@ fn interpret_ld_instruction(data: &Vec<&str>) -> Result<(CPUInstruction, u16), S
 			}
 		}
 	}
-	//
-	Err("Not an ld variant".to_string())
+
+	//LD I, addr
+	if data[1] == "i" {
+		let addr = match convert_number(&data[2]) {
+			Ok(n)    => n,
+			Err(msg) => return Err(msg),
+		};
+		return Ok((CPUInstruction::LD_I, addr));
+	}
+
+	let v = match convert_number(&data[2]) {
+		Ok(n)    => n << 8,
+		Err(msg) => return Err(msg),
+	};
+	match data[1] {
+		"dt"  => return Ok((CPUInstruction::LD_DT_Vx, v)),
+		"st"  => return Ok((CPUInstruction::LD_ST_Vx, v)),
+		"f"   => return Ok((CPUInstruction::LD_F, v)),
+		"b"   => return Ok((CPUInstruction::LD_B, v)),
+		"[i]" => return Ok((CPUInstruction::LD_ADDR_I_Vx, v)),
+		_     => return Err("Not an ld variant".to_string()),
+	}
 }
 
 //Returns two bytes to be written to the binary file

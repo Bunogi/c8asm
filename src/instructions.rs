@@ -38,7 +38,6 @@ pub enum CPUInstruction {
 	LD_B,
 	LD_ADDR_I_Vx,
 	LD_Vx_ADDR_I,
-	empty,
 }
 
 fn middle_nibs(input: u16) -> u16 {
@@ -88,6 +87,5 @@ pub fn convert_to_opcode(ins: CPUInstruction, param: u16) -> u16 {
 		LD_B         => 0xF033  | sec_nib(param),
 		LD_ADDR_I_Vx => 0xF055  | sec_nib(param),
 		LD_Vx_ADDR_I => 0xF065  | sec_nib(param),
-		empty        => panic!("Shouldn't ever happen"),
 	}
 }
