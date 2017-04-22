@@ -1,0 +1,35 @@
+cls
+ret
+sys 0x150
+jp 0x200
+call 0x150
+SNE va, 0xFF
+LD V1, 0x2
+ADD V1, 20
+LD V1, v0
+OR V2, V3
+AND V4, V5
+XOR V6, V7
+ADD V8, V9
+SUB Va, vb
+SHR V3
+SUBN Vc, vd
+SHL Ve
+SE Ve, Vf
+SNE Ve, vf
+SE V2, 0x20
+LD I, 0x400
+JP V0, 100
+RND V1, 0xFF
+DRW V2, V3, 0x5
+SKP V4
+SKNP V5
+LD V6, DT
+LD V7, K
+LD DT, V8
+LD ST, V9
+ADD I, Va
+LD F, Vb
+LD B, Vc
+LD [i], Vd
+LD Ve, [I]

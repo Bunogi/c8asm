@@ -30,12 +30,12 @@ fn main() {
 
 	let file = BufReader::new(file);
 
-	for line in file.lines() {
+	for (line_num, line) in file.lines().enumerate() {
 		let mut line = line.unwrap();
 		match interpret_line(&mut line) {
 			Ok(out) => println!("{:x}", out),
 			Err(e) => {
-				println!("Syntax error: {}", e);
+				println!("Syntax error on line {}: {}", line_num , e);
 				process::exit(2);
 			},
 		}

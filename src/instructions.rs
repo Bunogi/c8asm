@@ -1,5 +1,3 @@
-use std::string;
-
 //The instruction decoding is more legible this way
 #[allow(non_camel_case_types)]
 pub enum CPUInstruction {
@@ -51,7 +49,7 @@ fn sec_nib(input: u16) -> u16 {
 pub fn convert_to_opcode(ins: CPUInstruction, param: u16) -> u16 {
 	let param: u16 = param & 0x0FFF;
 	use CPUInstruction::*;
-	match ins { //Match the first one
+	match ins {
 		CLS          => 0x00E0,
 		RET          => 0x00EE,
 		SYS          => 0x0     | param,

@@ -55,9 +55,9 @@ fn interpret_ld_instruction(data: &Vec<&str>) -> Result<(CPUInstruction, u16), S
 		}
 		//LD Vx, *
 		match data[2] {
-			"dt"  => return Ok((CPUInstruction::LD_Vx_DT, 0)),
-			"k"   => return Ok((CPUInstruction::LD_K, 0)),
-			"[i]" => return Ok((CPUInstruction::LD_Vx_ADDR_I, 0)),
+			"dt"  => return Ok((CPUInstruction::LD_Vx_DT, convert_register(data[1]).unwrap() << 8 )),
+			"k"   => return Ok((CPUInstruction::LD_K, convert_register(data[1]).unwrap() << 8 )),
+			"[i]" => return Ok((CPUInstruction::LD_Vx_ADDR_I, convert_register(data[1]).unwrap() << 8)),
 			_     => { //LD Vx, byte
 				let x: u16;
 				let byte: u16;
@@ -89,7 +89,7 @@ fn interpret_ld_instruction(data: &Vec<&str>) -> Result<(CPUInstruction, u16), S
 		return Ok((CPUInstruction::LD_I, addr));
 	}
 
-	let v = match convert_number(&data[2]) {
+	let v = match convert_register(data[2]) {
 		Ok(n)    => n << 8,
 		Err(msg) => return Err(msg),
 	};
@@ -103,17 +103,94 @@ fn interpret_ld_instruction(data: &Vec<&str>) -> Result<(CPUInstruction, u16), S
 	}
 }
 
+fn convert_register(input: &str) -> Result<u16, String> {
+	if input.chars().nth(0).unwrap() != 'v' {
+		return Err("Invalid register: ".to_string() + input);
+	}
+	let num = u16::from_str_radix(&input[1..], 16).unwrap();
+	match num > 0xF {
+		true  => Err("Register out of range: ".to_string() + input),
+		false => Ok(num),
+	}
+}
+
 //Returns two bytes to be written to the binary file
 pub fn interpret_line(input: &mut String) -> Result<u16, String> {
 	sanitize_line(input);
 	let data: Vec<&str> = input.split(' ').collect();
 
-	match data[0] {
+	macro_rules! x {
+		() => (
+			(convert_register(&data[1]).unwrap() << 8)
+		)
+	}
+	macro_rules! y {
+		() => (
+			(convert_register(&data[2]).unwrap() << 4)
+		)
+	}
+
+	use instructions::CPUInstruction::*;
+	let (ins, op)  = match data[0] {
+		"cls" => (CLS, 0),
+		"ret" => (RET, 0),
+		"sys" => (SYS, convert_number(data[1]).unwrap()),
+		"jp" => {
+			//TODO: Add labels
+			match data.len() {
+				2 => (JP, convert_number(data[1]).unwrap()),
+				3 => {
+					if data[1] != "v0" {
+						return Err("Invalid register: ".to_string() + data[1] + ". Did you mean V0?");
+					} else {
+						(JP_V0, convert_number(data[2]).unwrap())
+					}
+				},
+				_ => return Err("Too many parameters!".to_string()),
+			}
+		},
+		//TODO: Labels again
+		"call" => (CALL, convert_number(data[1]).unwrap()),
+		"se" => {
+			if data[2].chars().nth(0).unwrap() != 'v' {
+				(SE, x!() | convert_number(data[2]).unwrap())
+			} else {
+				(SE_Vy, x!() | y!())
+			}
+		},
+		"sne" => {
+			if data[2].chars().nth(0).unwrap() != 'v' {
+				(SNE, x!() | convert_number(data[2]).unwrap())
+			} else {
+				(SNE_Vy, x!() | y!())
+			}
+		},
+		"add" => {
+			if data[2].chars().nth(0).unwrap() != 'v' {
+				(ADD, x!() | convert_number(data[2]).unwrap())
+			} else if data[1] == "i" {
+				(ADD_I, y!() << 4)
+			} else {
+				(ADD_Vy, x!() | y!())
+			}
+		},
+		"or"   => (OR,   x!() | y!()),
+		"and"  => (AND,  x!() | y!()),
+		"xor"  => (XOR,  x!() | y!()),
+		"sub"  => (SUB,  x!() | y!()),
+		"shr"  => (SHR,  x!()),
+		"subn" => (SUBN, x!() | y!()),
+		"shl"  => (SHL,  x!()),
+		"rnd"  => (RND,  x!() | (convert_number(data[2]).unwrap() & 0xFF)),
+		"drw"  => (DRW,  x!() | y!() | (convert_number(data[3]).unwrap() & 0xFF)),
+		"skp"  => (SKP,  x!()),
+		"sknp" => (SKNP, x!()),
 		"ld" => match interpret_ld_instruction(&data) {
-			Ok((ins, op)) => return Ok(convert_to_opcode(ins, op)),
+			Ok((ins, op)) => (ins, op),
 			Err(s)        => return Err(s),
 		},
-		_    => return Err("Failed to parse line: {}".to_string()  + input),
-	};
 
+		_    => return Err("Unknown instruction: {}".to_string()  + input),
+	};
+	Ok(convert_to_opcode(ins, op))
 }
