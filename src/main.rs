@@ -1,9 +1,13 @@
+//Command line args
 extern crate clap;
-
 use clap::{Arg, App};
 
+//Set endianness
+extern crate byteorder;
+use byteorder::{WriteBytesExt, BigEndian};
+
 use std::fs::File;
-use std::io::{Read};
+use std::io::{Read, Write};
 use std::process;
 
 mod instructions;
@@ -13,10 +17,12 @@ mod interpret;
 use interpret::*;
 
 fn main() {
-	let args = App::new("b8asm")
-		.version("0.0")
+	let args = App::new("c8asm")
+		.version("0.0.1")
 		.author("Bunogi")
-		.arg(Arg::with_name("file").help("File to use").required(true))
+		.arg(Arg::with_name("file").help("File to assemble").required(true))
+		.arg(Arg::with_name("output").help("Output file").default_value("./a.out").short("o"))
+		.arg(Arg::with_name("stdout").help("Write output to stdout instead of your file").short("s").conflicts_with("o"))
 		.about("Assembles Chip-8 programs")
 		.get_matches();
 
@@ -63,19 +69,41 @@ fn main() {
 			offset += 1;
 			instructions.push(line);
 		}
-		index += 1; 
+		index += 1;
 	}
 
 	index = 0;
+
+	let mut opcodes: Vec<u16> = Vec::new();
 	for line in &instructions {
 		let data: Vec<&str> = line.split(' ').collect();
 		match interpret_line(&data, &labels) {
-			Ok(out) => println!("{:x}", out),
+			Ok(out) => opcodes.push(out),
 			Err(e)  => {
 				println!("Syntax error on line {}: {}", index + 1, e + line);
 				process::exit(2);
 			},
 		}
 		index += 1;
+	}
+
+	if args.is_present("o") {
+		for i in opcodes {
+			println!("{:x}", i);
+		}
+	} else {
+		//Explicitly set up big endian for the chip-8 executable
+		let mut to_output: Vec<u8> = Vec::new();
+		let slice: &[u16] = &opcodes;
+		for &n in slice {
+			let _ = to_output.write_u16::<BigEndian>(n);
+		}
+
+		let mut file = File::create(args.value_of("output").expect("No file specified!")).unwrap();
+		match file.write_all(to_output.as_slice()) {
+			Ok(_) => {},
+			Err(s) => println!("Failed to write to file {}: {}", args.value_of("output").unwrap(), s),
+		}
+
 	}
 }

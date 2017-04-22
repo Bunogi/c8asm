@@ -1,7 +1,7 @@
 ;Flash "0" on the screen repeatedly
 start:
 LD V0, 0x10
-LD V1, 0x20
+LD V1, 0x10
 LD I, 0x0
 
 startloop:
