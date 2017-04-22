@@ -4,9 +4,14 @@ use std::num;
 use instructions::*;
 
 //Returns a string with comments removed, with everything in lowercase
-pub fn sanitize_line(input: &mut String){
+pub fn sanitize_line(input: &mut String) {
 	println!("Input: {}", *input);
 	while let Some(i) = input.find(',') { input.remove(i); }
+
+	match input.find(';') {
+		Some(i) => *input = input[0..i].to_string(),
+		None    => {},
+	}
 
 	//TODO: remove comments from input
 	input.trim_left();
@@ -114,11 +119,22 @@ fn convert_register(input: &str) -> Result<u16, String> {
 	}
 }
 
-//Returns two bytes to be written to the binary file
-pub fn interpret_line(input: &mut String) -> Result<u16, String> {
-	sanitize_line(input);
-	let data: Vec<&str> = input.split(' ').collect();
+pub struct Label<'a> {
+	pub name: &'a str,
+	pub offset: u16,
+}
 
+fn get_label(input: &str, labels: &Vec<Label>) -> Result<u16, String> {
+	for i in labels {
+		if i.name == input {
+			return Ok(i.offset);
+		}
+	}
+	Err(format!("Unknown Label: {}", input).to_string())
+}
+
+//Returns two bytes to be written to the binary file
+pub fn interpret_line(data: &Vec<&str>, labels: &Vec<Label>) -> Result<u16, String> {
 	macro_rules! x {
 		() => (
 			(convert_register(&data[1]).unwrap() << 8)
@@ -132,18 +148,27 @@ pub fn interpret_line(input: &mut String) -> Result<u16, String> {
 
 	use instructions::CPUInstruction::*;
 	let (ins, op)  = match data[0] {
+		""    => (blank, 0), //Skip statements without an instruction
 		"cls" => (CLS, 0),
 		"ret" => (RET, 0),
 		"sys" => (SYS, convert_number(data[1]).unwrap()),
-		"jp" => {
+		"jp"  => {
 			//TODO: Add labels
 			match data.len() {
-				2 => (JP, convert_number(data[1]).unwrap()),
+				2 =>  {
+					match get_label(data[1], labels) {
+						Ok(n)  => (JP, n),
+						Err(_) => (JP, convert_number(data[1]).unwrap()),
+					}
+				}
 				3 => {
 					if data[1] != "v0" {
 						return Err("Invalid register: ".to_string() + data[1] + ". Did you mean V0?");
 					} else {
-						(JP_V0, convert_number(data[2]).unwrap())
+						match get_label(data[1], labels) {
+							Ok(n)  => (JP_V0, n),
+							Err(_) => (JP_V0, convert_number(data[1]).unwrap()),
+						}
 					}
 				},
 				_ => return Err("Too many parameters!".to_string()),
@@ -185,12 +210,12 @@ pub fn interpret_line(input: &mut String) -> Result<u16, String> {
 		"drw"  => (DRW,  x!() | y!() | (convert_number(data[3]).unwrap() & 0xFF)),
 		"skp"  => (SKP,  x!()),
 		"sknp" => (SKNP, x!()),
-		"ld" => match interpret_ld_instruction(&data) {
+		"ld"   => match interpret_ld_instruction(&data) {
 			Ok((ins, op)) => (ins, op),
 			Err(s)        => return Err(s),
 		},
 
-		_    => return Err("Unknown instruction: {}".to_string()  + input),
+		_ => return Err(format!("Unknown instruction: {}", data[0]).to_string()),
 	};
 	Ok(convert_to_opcode(ins, op))
 }
