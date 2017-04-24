@@ -116,7 +116,7 @@ pub struct Label {
 }
 
 //Returns the instruction and label, as well as whether a label is used
-pub fn interpret_line(data: &Vec<&str>) -> Result<(CPUInstruction, u16, bool), String> {
+pub fn interpret_line(data: &Vec<&str>) -> Result<(CPUInstruction, u16, i8), String> {
 	macro_rules! x {
 		() => (
 			(convert_register(&data[1]).unwrap() << 8)
@@ -129,20 +129,26 @@ pub fn interpret_line(data: &Vec<&str>) -> Result<(CPUInstruction, u16, bool), S
 	}
 
 	use instructions::CPUInstruction::*;
-	let mut needs_label = false;
 
+	let label_pos: i8;
+
+	//Sets up the return value
 	macro_rules! check_label {
-		($str:expr) => {
-			match convert_number($str) {
-				Some(n) => n,
+		($instr:expr, $index:expr) => {
+			match convert_number(data[$index as usize]) {
+				Some(n) => {
+					label_pos = -1;
+					($instr, n)
+				},
 				None    => {
-					needs_label = true;
-					0
-				}
+					label_pos = $index;
+					($instr, 0,)
+				},
 			}
 		}
 	}
-	let (ins, op)  = match data[0] {
+
+	let (ins, op) = match data[0] {
 		""    => (blank, 0), //Skip statements without an instruction
 		"cls" => (CLS, 0),
 		"ret" => (RET, 0),
@@ -150,26 +156,19 @@ pub fn interpret_line(data: &Vec<&str>) -> Result<(CPUInstruction, u16, bool), S
 		"jp"  => {
 			match data.len() {
 				2 =>  {
-					match convert_number(data[1]) {
-						//Assume that the operand is a label if we can't convert it to a number
-						Some(n) => (JP, n),
-						None  => {
-							needs_label = true;
-							(JP, 0)  
-						},
-					}
+					check_label!(JP, 1)
 				}
 				3 => {
 					if data[1] != "v0" {
 						return Err("Invalid register: ".to_string() + data[1] + ". Did you mean V0?");
 					} else {
-						(JP_V0, check_label!(data[2]))
+						check_label!(JP_V0, 2)
 					}
 				},
 				_ => return Err("Too many parameters!".to_string()),
 			}
 		},
-		"call" => (CALL, check_label!(data[1])),
+		"call" => check_label!(CALL, 1),
 		"se" => {
 			if data[2].chars().nth(0).unwrap() != 'v' {
 				(SE, x!() | convert_number(data[2]).unwrap())
@@ -207,7 +206,7 @@ pub fn interpret_line(data: &Vec<&str>) -> Result<(CPUInstruction, u16, bool), S
 		"ld"   =>  {
 			//LD I, addr
 			if data[1] == "i" {
-				(LD_I, check_label!(data[2]))
+				check_label!(LD_I, 2)
 			} else {
 				match interpret_ld_instruction(&data) {
 					Ok((ins, op)) => (ins, op),
@@ -218,5 +217,5 @@ pub fn interpret_line(data: &Vec<&str>) -> Result<(CPUInstruction, u16, bool), S
 
 		_ => return Err(format!("Unknown instruction: {}", data[0]).to_string()),
 	};
-	Ok((ins, op, needs_label))
+	Ok((ins, op, label_pos))
 }

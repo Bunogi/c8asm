@@ -48,23 +48,23 @@ fn main() {
 		}
 	}
 
-	let mut labels:       Vec <Label> = Vec ::new();
-	let mut needs_labels: Vec <u16>   = Vec ::new();
-	let mut opcodes:      Vec <u16>   = Vec ::new();
+	let mut labels:       Vec <Label>     = Vec ::new();
+	let mut needs_labels: Vec <(u32, i8)> = Vec ::new();
+	let mut opcodes:      Vec <u16>       = Vec ::new();
 
 	let mut index  = 0;
 	let mut offset = 0;
 
-	for line in ready_lines {
+	for line in &ready_lines {
 		let data: Vec<&str> = line.split(' ').collect();
 		if data.len() == 1 {
 			if let Some(i) = data[0].find(':') {
 				labels.push(Label {name: data[0][0..i].to_string().clone(), offset: offset});
 			}
 			match interpret_line(&data) {
-				Ok((ins, op, needs_label)) => {
-					if needs_label {
-						needs_labels.push(offset);
+				Ok((ins, op, label_pos)) => {
+					if label_pos < 0 {
+						needs_labels.push((index, label_pos));
 						opcodes.push(0);
 					}
 					else {
