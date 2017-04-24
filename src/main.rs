@@ -34,8 +34,6 @@ fn main() {
 		Ok(file) => file,
 	};
 
-	let mut offset = 0u16;
-
 	let mut lines = String::new();
 	file.read_to_string(&mut lines).unwrap();
 
@@ -50,39 +48,35 @@ fn main() {
 		}
 	}
 
-	let mut labels: Vec<Label> = Vec::new();
-	let mut instructions: Vec<&str> = Vec::new();
+	let mut labels:       Vec <Label> = Vec ::new();
+	let mut needs_labels: Vec <u16>   = Vec ::new();
+	let mut opcodes:      Vec <u16>   = Vec ::new();
 
-	//First pass: Find labels and variables
-	let mut index = 0;
-	for line in &ready_lines {
+	let mut index  = 0;
+	let mut offset = 0;
+
+	for line in ready_lines {
 		let data: Vec<&str> = line.split(' ').collect();
-		if data.len() == 1 { //Possible label
-			match data[0].find(':') {
-				Some(i) => labels.push( Label {name: &data[0][0..i], offset: offset} ), //Definetly a label
-				None    => {
-					println!("Malformed label on line {}: {}", index + 1, line.as_str());
+		if data.len() == 1 {
+			if let Some(i) = data[0].find(':') {
+				labels.push(Label {name: data[0][0..i].to_string().clone(), offset: offset});
+			}
+			match interpret_line(&data) {
+				Ok((ins, op, needs_label)) => {
+					if needs_label {
+						needs_labels.push(offset);
+						opcodes.push(0);
+					}
+					else {
+						opcodes.push(convert_to_opcode(ins, op));
+					}
+					offset += 1;
+				},
+				Err(e)  => {
+					println!("Syntax error on line {}: {}", index + 1, e + line.as_str());
 					process::exit(2);
 				},
 			}
-		} else {
-			offset += 1;
-			instructions.push(line);
-		}
-		index += 1;
-	}
-
-	index = 0;
-
-	let mut opcodes: Vec<u16> = Vec::new();
-	for line in &instructions {
-		let data: Vec<&str> = line.split(' ').collect();
-		match interpret_line(&data, &labels) {
-			Ok(out) => opcodes.push(out),
-			Err(e)  => {
-				println!("Syntax error on line {}: {}", index + 1, e + line);
-				process::exit(2);
-			},
 		}
 		index += 1;
 	}

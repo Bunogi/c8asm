@@ -19,7 +19,7 @@ pub fn sanitize_line(input: &mut String) {
 	*input = input.to_lowercase();
 }
 
-fn convert_number(input: &str) -> Result<u16, String> {
+fn convert_number(input: &str) -> Option<u16> {
 	let convert = input.to_string();
 	let result: result::Result<u16, num::ParseIntError>;
 	if convert.chars().count() >= 2 {
@@ -34,9 +34,9 @@ fn convert_number(input: &str) -> Result<u16, String> {
 	}
 
 	match result {
-		Ok(num) => return Ok(num),
-		Err(_)  => return Err("Not a number: ".to_string() + input),
-	};
+		Ok(num) => Some(num),
+		Err(_)  => None,
+	}
 }
 
 fn interpret_ld_instruction(data: &Vec<&str>) -> Result<(CPUInstruction, u16), String> {
@@ -48,20 +48,20 @@ fn interpret_ld_instruction(data: &Vec<&str>) -> Result<(CPUInstruction, u16), S
 		if data[2].chars().nth(0).unwrap() == 'v' {
 			let convert = convert_number(&data[2][1..]);
 			match convert {
-				Ok(n) => {
+				Some(n) => {
 					let x = convert_number(&data[1][1..]);
 					match x {
-						Ok(m)    => return Ok((CPUInstruction::LD_Vy, (m << 4) | (n << 8))),
-						Err(msg) => return Err(msg),
+						Some(m) => return Ok((CPUInstruction::LD_Vy, (m << 4) | (n << 8))),
+						None    => return Err(format!("Not a number: {}", data[2])),
 					}
 				}
-				Err(msg) => return Err(msg),
+				None => return Err(format!("Unknown register: {}",  data[2])),
 			}
 		}
 		//LD Vx, *
 		match data[2] {
-			"dt"  => return Ok((CPUInstruction::LD_Vx_DT, convert_register(data[1]).unwrap() << 8 )),
-			"k"   => return Ok((CPUInstruction::LD_K, convert_register(data[1]).unwrap() << 8 )),
+			"dt"  => return Ok((CPUInstruction::LD_Vx_DT, convert_register(data[1]).unwrap() << 8)),
+			"k"   => return Ok((CPUInstruction::LD_K, convert_register(data[1]).unwrap() << 8)),
 			"[i]" => return Ok((CPUInstruction::LD_Vx_ADDR_I, convert_register(data[1]).unwrap() << 8)),
 			_     => { //LD Vx, byte
 				let x: u16;
@@ -69,29 +69,20 @@ fn interpret_ld_instruction(data: &Vec<&str>) -> Result<(CPUInstruction, u16), S
 
 				let convert = convert_number(&data[1][1..]);
 				match convert {
-					Ok(n)    => {
+					Some(n) => {
 						x = n;
 					},
-					Err(msg) => return Err(msg),
+					None => return Err(format!("Unknown register: {}", data[1])),
 				}
 
 				match convert_number(&data[2]) {
-					Ok(n)    => byte = n & 0x00FF,
-					Err(msg) => return Err(msg),
+					Some(n) => byte = n & 0x00FF,
+					None    => return Err(format!("Not a number: {}", data[2])),
 				}
 				return Ok((CPUInstruction::LD, (x << 8) | byte));
 
 			}
 		}
-	}
-
-	//LD I, addr
-	if data[1] == "i" {
-		let addr = match convert_number(&data[2]) {
-			Ok(n)    => n,
-			Err(msg) => return Err(msg),
-		};
-		return Ok((CPUInstruction::LD_I, addr));
 	}
 
 	let v = match convert_register(data[2]) {
@@ -119,22 +110,13 @@ fn convert_register(input: &str) -> Result<u16, String> {
 	}
 }
 
-pub struct Label<'a> {
-	pub name: &'a str,
+pub struct Label {
+	pub name: String,
 	pub offset: u16,
 }
 
-fn get_label(input: &str, labels: &Vec<Label>) -> Result<u16, String> {
-	for i in labels {
-		if i.name == input {
-			return Ok(i.offset);
-		}
-	}
-	Err(format!("Unknown Label: {}", input).to_string())
-}
-
-//Returns two bytes to be written to the binary file
-pub fn interpret_line(data: &Vec<&str>, labels: &Vec<Label>) -> Result<u16, String> {
+//Returns the instruction and label, as well as whether a label is used
+pub fn interpret_line(data: &Vec<&str>) -> Result<(CPUInstruction, u16, bool), String> {
 	macro_rules! x {
 		() => (
 			(convert_register(&data[1]).unwrap() << 8)
@@ -147,35 +129,47 @@ pub fn interpret_line(data: &Vec<&str>, labels: &Vec<Label>) -> Result<u16, Stri
 	}
 
 	use instructions::CPUInstruction::*;
+	let mut needs_label = false;
+
+	macro_rules! check_label {
+		($str:expr) => {
+			match convert_number($str) {
+				Some(n) => n,
+				None    => {
+					needs_label = true;
+					0
+				}
+			}
+		}
+	}
 	let (ins, op)  = match data[0] {
 		""    => (blank, 0), //Skip statements without an instruction
 		"cls" => (CLS, 0),
 		"ret" => (RET, 0),
 		"sys" => (SYS, convert_number(data[1]).unwrap()),
 		"jp"  => {
-			//TODO: Add labels
 			match data.len() {
 				2 =>  {
-					match get_label(data[1], labels) {
-						Ok(n)  => (JP, n),
-						Err(_) => (JP, convert_number(data[1]).unwrap()),
+					match convert_number(data[1]) {
+						//Assume that the operand is a label if we can't convert it to a number
+						Some(n) => (JP, n),
+						None  => {
+							needs_label = true;
+							(JP, 0)  
+						},
 					}
 				}
 				3 => {
 					if data[1] != "v0" {
 						return Err("Invalid register: ".to_string() + data[1] + ". Did you mean V0?");
 					} else {
-						match get_label(data[1], labels) {
-							Ok(n)  => (JP_V0, n),
-							Err(_) => (JP_V0, convert_number(data[1]).unwrap()),
-						}
+						(JP_V0, check_label!(data[2]))
 					}
 				},
 				_ => return Err("Too many parameters!".to_string()),
 			}
 		},
-		//TODO: Labels again
-		"call" => (CALL, convert_number(data[1]).unwrap()),
+		"call" => (CALL, check_label!(data[1])),
 		"se" => {
 			if data[2].chars().nth(0).unwrap() != 'v' {
 				(SE, x!() | convert_number(data[2]).unwrap())
@@ -210,12 +204,19 @@ pub fn interpret_line(data: &Vec<&str>, labels: &Vec<Label>) -> Result<u16, Stri
 		"drw"  => (DRW,  x!() | y!() | (convert_number(data[3]).unwrap() & 0xFF)),
 		"skp"  => (SKP,  x!()),
 		"sknp" => (SKNP, x!()),
-		"ld"   => match interpret_ld_instruction(&data) {
-			Ok((ins, op)) => (ins, op),
-			Err(s)        => return Err(s),
+		"ld"   =>  {
+			//LD I, addr
+			if data[1] == "i" {
+				(LD_I, check_label!(data[2]))
+			} else {
+				match interpret_ld_instruction(&data) {
+					Ok((ins, op)) => (ins, op),
+					Err(s)        => return Err(s),
+				}
+			}
 		},
 
 		_ => return Err(format!("Unknown instruction: {}", data[0]).to_string()),
 	};
-	Ok(convert_to_opcode(ins, op))
+	Ok((ins, op, needs_label))
 }
