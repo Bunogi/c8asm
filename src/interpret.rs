@@ -5,7 +5,6 @@ use instructions::*;
 
 //Returns a string with comments removed, with everything in lowercase
 pub fn sanitize_line(input: &mut String) {
-	println!("Input: {}", *input);
 	while let Some(i) = input.find(',') { input.remove(i); }
 
 	match input.find(';') {
@@ -13,7 +12,6 @@ pub fn sanitize_line(input: &mut String) {
 		None    => {},
 	}
 
-	//TODO: remove comments from input
 	input.trim_left();
 	input.trim_right();
 	*input = input.to_lowercase();
@@ -112,7 +110,14 @@ fn convert_register(input: &str) -> Result<u16, String> {
 
 pub struct Label {
 	pub name: String,
-	pub offset: u16,
+	pub offset: usize,
+}
+
+//Comparing offset is not necesarry
+impl PartialEq for Label {
+	fn eq(&self, other: &Label) -> bool {
+		self.name == other.name
+	}
 }
 
 //Returns the instruction and label, as well as whether a label is used
@@ -130,16 +135,13 @@ pub fn interpret_line(data: &Vec<&str>) -> Result<(CPUInstruction, u16, i8), Str
 
 	use instructions::CPUInstruction::*;
 
-	let label_pos: i8;
+	let mut label_pos: i8 = -1;
 
 	//Sets up the return value
 	macro_rules! check_label {
 		($instr:expr, $index:expr) => {
 			match convert_number(data[$index as usize]) {
-				Some(n) => {
-					label_pos = -1;
-					($instr, n)
-				},
+				Some(n) => ($instr, n),
 				None    => {
 					label_pos = $index;
 					($instr, 0,)
@@ -215,7 +217,7 @@ pub fn interpret_line(data: &Vec<&str>) -> Result<(CPUInstruction, u16, i8), Str
 			}
 		},
 
-		_ => return Err(format!("Unknown instruction: {}", data[0]).to_string()),
+		_ => return Err(format!("Unknown instruction: \"{}\"", data[0]).to_string()),
 	};
 	Ok((ins, op, label_pos))
 }
