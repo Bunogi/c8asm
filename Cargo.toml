@@ -1,9 +1,8 @@
 [package]
 name = "c8asm"
-version = "0.0.1"
+version = "1.0.0"
 authors = ["Bunogi <2bunogi@gmail.com>"]
 license-file = "LICENSE"
 
 [dependencies]
 clap = "2.23.2"
-byteorder = "1.0.0"

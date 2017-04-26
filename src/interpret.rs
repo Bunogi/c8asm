@@ -26,17 +26,16 @@ fn convert_number(input: &str) -> Option<u16> {
 	}
 
 	let result: result::Result<u16, num::ParseIntError>; 
-	if convert.chars().count() >= 2 { 
+	if convert.chars().count() > 2 { 
 		//Check if we need to convert from binary or hex 
-		if convert[..2].to_string() == "0x" {
+		if convert[..2] == *"0x" {
 			result = u16::from_str_radix(&convert[2..], 16);
-		} else if convert[..2].to_string() == "0b" {
+		} else if convert[..2] == *"0b" {
 			result = u16::from_str_radix(&convert[2..], 2);
 		} else {
 			result = convert.parse::<u16>();
 		}
-	}
-	else {
+	} else {
 		result = convert.parse::<u16>();
 	}
 
@@ -111,11 +110,35 @@ pub struct Label {
 	pub offset: usize,
 }
 
-//Comparing offset is not necesarry
+//Compare names only
 impl PartialEq for Label {
 	fn eq(&self, other: &Label) -> bool {
 		self.name == other.name
 	}
+}
+
+fn get_zero_count(input: u16) -> usize {
+	let mut n: usize = 0;
+	let input = format!("{:08b}", input).to_string();
+
+	for c in input.chars() {
+		if c == '0' {
+			n += 1;
+		} else {
+			break;
+		}
+	}
+	n
+}
+
+//Includes preceeding zeroes
+fn get_binary_width(input: &String) -> u8 {
+	let convert = convert_number(input).unwrap();
+	//Function fails for convert == 0, look it up instead
+	if convert == 0 {
+		return 8;
+	}
+	(format!("{:b}", convert).chars().count() + get_zero_count(convert)) as u8
 }
 
 //Returns the instruction and label, as well as whether a label is used
@@ -214,15 +237,14 @@ pub fn interpret_line(data: &Vec<&str>) -> Result<(CPUInstruction, u16, i8), Str
 				}
 			}
 		},
-		//Define word
-		"dw" => {
-			let num = convert_number(data[1]).unwrap();
-			//Lead with zeroes so that number can start with 0
-			let width = format!("{:016b}", num).chars().count();
-			if width != 16 {
-				return Err(format!("Invalid number width: {}. Expected 16", width));
+		//Define byte
+		"db" => {
+			let width = get_binary_width(&data[1].to_string());
+			if width != 8 {
+				return Err(format!("Invalid number width: {}. Expected 8", width));
 			}
-			(dw, num)
+			let num = convert_number(data[1]).unwrap();
+			(db, num)
 		}
 		_ => return Err(format!("Unknown instruction: \"{}\"", data[0]).to_string()),
 	};

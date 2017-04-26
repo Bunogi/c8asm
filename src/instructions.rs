@@ -1,5 +1,6 @@
 //The instruction decoding is more legible this way
 #[allow(non_camel_case_types)]
+#[derive(PartialEq)]
 pub enum CPUInstruction {
 	CLS,
 	RET,
@@ -36,7 +37,7 @@ pub enum CPUInstruction {
 	LD_B,
 	LD_ADDR_I_Vx,
 	LD_Vx_ADDR_I,
-	dw,
+	db,
 	blank,
 }
 
@@ -48,9 +49,10 @@ fn sec_nib(input: u16) -> u16 {
 	input & 0x0F00
 }
 
-pub fn convert_to_opcode(ins: CPUInstruction, param: u16) -> u16 {
+//Return format: most significant byte, ls byte
+pub fn convert_to_opcode(ins: CPUInstruction, param: u16) -> (u8, u8) {
 	use CPUInstruction::*;
-	match ins {
+	let output = match ins {
 		CLS          => 0x00E0,
 		RET          => 0x00EE,
 		SYS          => 0x0     | param,
@@ -86,7 +88,8 @@ pub fn convert_to_opcode(ins: CPUInstruction, param: u16) -> u16 {
 		LD_B         => 0xF033  | sec_nib(param),
 		LD_ADDR_I_Vx => 0xF055  | sec_nib(param),
 		LD_Vx_ADDR_I => 0xF065  | sec_nib(param),
-		dw           => param,
+		db           => param,
 		blank        => panic!("Blank instruction"),
-	}
+	};
+	((output >> 8) as u8, output as u8)
 }

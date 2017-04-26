@@ -2,10 +2,6 @@
 extern crate clap;
 use clap::{Arg, App};
 
-//For setting endianness
-extern crate byteorder;
-use byteorder::{WriteBytesExt, BigEndian};
-
 use std::fs::File;
 use std::io::{Read, Write};
 use std::process;
@@ -50,28 +46,36 @@ fn main() {
 	}
 
 	let mut needs_labels: Vec<(CPUInstruction, &str, usize, i8)> = Vec::new();
-	//We can only take up so much space
-	let mut opcodes:Vec<u16>  = Vec::new();
+	let mut opcodes:Vec<u8>  = Vec::new();
 	let mut labels:Vec<Label> = Vec::new();
 
-	let mut opcode_num: usize = 0;
+	let mut memory_offset: usize = 0;
 
+	//Splits the opcode. Takes a u16
 	for line in &ready_lines {
 		let data: Vec<&str> = line.split_whitespace().collect();
 		if data.len() == 1 {
 			if let Some(i) = data[0].find(':') {
-				labels.push(Label {name: data[0][0..i].to_string().clone(), offset: 0x200 + (opcode_num * 2)});
+				labels.push(Label {name: data[0][0..i].to_string().clone(), 
+					offset: 0x200 + memory_offset});
 				continue;
 			}
 		}
+		use CPUInstruction::db;
 		match interpret_line(&data) {
 			Ok((ins, op, label_pos)) => {
-				if label_pos < 0 {
-					opcodes.push(convert_to_opcode(ins, op));
-				}
-				else {
-					opcodes.push(0);
-					needs_labels.push((ins, &line, opcode_num, label_pos));
+				if ins == db {
+					memory_offset += 1;
+					opcodes.push(op as u8);
+				} else if label_pos < 0 {
+					let (a, b) = convert_to_opcode(ins, op);
+					opcodes.push(a);
+					opcodes.push(b);
+					memory_offset += 2;
+				} else {
+					opcodes.push(0); opcodes.push(0);
+					needs_labels.push((ins, &line, memory_offset, label_pos));
+					memory_offset += 2;
 				}
 			},
 			Err(e)  => {
@@ -79,13 +83,16 @@ fn main() {
 				process::exit(2);
 			},
 		}
-		opcode_num += 1;
 	}
 
 	for (ins, line, offset, label_pos) in needs_labels {
 		let label = line.split_whitespace().nth(label_pos as usize).unwrap();
 		match labels.iter().find(|&l| *l == Label{name:label.to_string(), offset: 0}) {
-			Some(i) => opcodes[offset as usize] = convert_to_opcode(ins, i.offset as u16),
+			Some(i) => {
+				let (a, b) = convert_to_opcode(ins, i.offset as u16);
+				opcodes[offset as usize] = a;
+				opcodes[(offset + 1) as usize] = b;
+			}
 			None    => {
 				println!("\"{}\": Unknown label: {}", line, label);
 				process::exit(2);
@@ -98,15 +105,8 @@ fn main() {
 			println!("{:x}", i);
 		}
 	} else {
-		//Explicitly set up big endian for the chip-8 executable
-		let mut to_output: Vec<u8> = Vec::new();
-		let slice: &[u16] = &opcodes;
-		for &n in slice {
-			let _ = to_output.write_u16::<BigEndian>(n);
-		}
-
 		let mut file = File::create(args.value_of("output").expect("No file specified!")).unwrap();
-		match file.write_all(to_output.as_slice()) {
+		match file.write_all(opcodes.as_slice()) {
 			Ok(_) => {},
 			Err(s) => println!("Failed to write to file {}: {}", args.value_of("output").unwrap(), s),
 		}
