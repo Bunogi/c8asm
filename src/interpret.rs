@@ -18,11 +18,20 @@ pub fn sanitize_line(input: &mut String) {
 }
 
 fn convert_number(input: &str) -> Option<u16> {
-	let convert = input.to_string();
-	let result: result::Result<u16, num::ParseIntError>;
-	if convert.chars().count() >= 2 {
+	let mut convert = input.to_string();
+	let mut negative = false;
+	if convert.chars().nth(0).unwrap() == '-' {
+		negative = true;
+		convert = convert[1..].to_string();
+	}
+
+	let result: result::Result<u16, num::ParseIntError>; 
+	if convert.chars().count() >= 2 { 
+		//Check if we need to convert from binary or hex 
 		if convert[..2].to_string() == "0x" {
 			result = u16::from_str_radix(&convert[2..], 16);
+		} else if convert[..2].to_string() == "0b" {
+			result = u16::from_str_radix(&convert[2..], 2);
 		} else {
 			result = convert.parse::<u16>();
 		}
@@ -32,7 +41,13 @@ fn convert_number(input: &str) -> Option<u16> {
 	}
 
 	match result {
-		Ok(num) => Some(num),
+		Ok(num) => {
+			if negative {
+				Some((0x10000 - (num as u32)) as u16)
+			} else {
+				Some(num)
+			}
+		},
 		Err(_)  => None,
 	}
 }
@@ -40,38 +55,21 @@ fn convert_number(input: &str) -> Option<u16> {
 fn interpret_ld_instruction(data: &Vec<&str>) -> Result<(CPUInstruction, u16), String> {
 	//LD Vx, Vy
 	if data[1].chars().nth(0).unwrap() == 'v' {
-		if data[1].chars().count() > 2 {
-			return Err("Unknown register: ".to_string() + data[1]);
-		}
+		let x = convert_register(data[1])?;
 		if data[2].chars().nth(0).unwrap() == 'v' {
 			let convert = convert_number(&data[2][1..]);
 			match convert {
-				Some(n) => {
-					let x = convert_number(&data[1][1..]);
-					match x {
-						Some(m) => return Ok((CPUInstruction::LD_Vy, (m << 4) | (n << 8))),
-						None    => return Err(format!("Not a number: {}", data[2])),
-					}
-				}
-				None => return Err(format!("Unknown register: {}",  data[2])),
+				Some(n) => return Ok((CPUInstruction::LD_Vy, (x << 4) | (n << 8))),
+				None    => return Err(format!("Unknown register: {}",  data[2])),
 			}
 		}
 		//LD Vx, *
 		match data[2] {
-			"dt"  => return Ok((CPUInstruction::LD_Vx_DT, convert_register(data[1]).unwrap() << 8)),
-			"k"   => return Ok((CPUInstruction::LD_K, convert_register(data[1]).unwrap() << 8)),
-			"[i]" => return Ok((CPUInstruction::LD_Vx_ADDR_I, convert_register(data[1]).unwrap() << 8)),
+			"dt"  => return Ok((CPUInstruction::LD_Vx_DT, convert_register(data[1])? << 8)),
+			"k"   => return Ok((CPUInstruction::LD_K, convert_register(data[1])? << 8)),
+			"[i]" => return Ok((CPUInstruction::LD_Vx_ADDR_I, convert_register(data[1])? << 8)),
 			_     => { //LD Vx, byte
-				let x: u16;
 				let byte: u16;
-
-				let convert = convert_number(&data[1][1..]);
-				match convert {
-					Some(n) => {
-						x = n;
-					},
-					None => return Err(format!("Unknown register: {}", data[1])),
-				}
 
 				match convert_number(&data[2]) {
 					Some(n) => byte = n & 0x00FF,
@@ -85,7 +83,7 @@ fn interpret_ld_instruction(data: &Vec<&str>) -> Result<(CPUInstruction, u16), S
 
 	let v = match convert_register(data[2]) {
 		Ok(n)    => n << 8,
-		Err(msg) => return Err(msg),
+		Err(e)   => return Err(e),
 	};
 	match data[1] {
 		"dt"  => return Ok((CPUInstruction::LD_DT_Vx, v)),
@@ -99,7 +97,7 @@ fn interpret_ld_instruction(data: &Vec<&str>) -> Result<(CPUInstruction, u16), S
 
 fn convert_register(input: &str) -> Result<u16, String> {
 	if input.chars().nth(0).unwrap() != 'v' {
-		return Err("Invalid register: ".to_string() + input);
+		return Err(format!("Invalid register: '{}'", input));
 	}
 	let num = u16::from_str_radix(&input[1..], 16).unwrap();
 	match num > 0xF {
@@ -124,12 +122,12 @@ impl PartialEq for Label {
 pub fn interpret_line(data: &Vec<&str>) -> Result<(CPUInstruction, u16, i8), String> {
 	macro_rules! x {
 		() => (
-			(convert_register(&data[1]).unwrap() << 8)
+			(convert_register(&data[1])? << 8)
 		)
 	}
 	macro_rules! y {
 		() => (
-			(convert_register(&data[2]).unwrap() << 4)
+			(convert_register(&data[2])? << 4)
 		)
 	}
 
@@ -144,7 +142,7 @@ pub fn interpret_line(data: &Vec<&str>) -> Result<(CPUInstruction, u16, i8), Str
 				Some(n) => ($instr, n),
 				None    => {
 					label_pos = $index;
-					($instr, 0,)
+					($instr, 0)
 				},
 			}
 		}
@@ -216,7 +214,16 @@ pub fn interpret_line(data: &Vec<&str>) -> Result<(CPUInstruction, u16, i8), Str
 				}
 			}
 		},
-
+		//Define word
+		"dw" => {
+			let num = convert_number(data[1]).unwrap();
+			//Lead with zeroes so that number can start with 0
+			let width = format!("{:016b}", num).chars().count();
+			if width != 16 {
+				return Err(format!("Invalid number width: {}. Expected 16", width));
+			}
+			(dw, num)
+		}
 		_ => return Err(format!("Unknown instruction: \"{}\"", data[0]).to_string()),
 	};
 	Ok((ins, op, label_pos))

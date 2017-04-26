@@ -1,12 +1,21 @@
-;Register names can also be lowercase
-ld V0, 0x20
-ld V1, V0
+ld vd, 0x10
+ld ve, 8
 ld I, sprite
-drw V0, V1, 5
+ld v5, 5
+
+start:
+ld dt, v5
+
+wait:
+ld v0, dt
+se v0, 0
+jp wait
+
+draw:
+drw vd, ve, 5
+jp start
 
 sprite:
-data 0xF0
-data 0x90
-data 0x90
-data 0x90
-data 0xF0
+db 0xF090
+db 0x9090
+db 0xF000
