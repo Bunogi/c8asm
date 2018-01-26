@@ -12,6 +12,9 @@ use instructions::*;
 mod interpret;
 use interpret::*;
 
+mod preproccessor;
+use preproccessor::preprocess;
+
 fn main() {
     let args = App::new("c8asm")
         .version("0.0.1")
@@ -47,16 +50,10 @@ fn main() {
     let mut lines = String::new();
     file.read_to_string(&mut lines).unwrap();
 
-    let lines: Vec<&str> = lines.split("\n").collect();
-    let mut ready_lines: Vec<String> = Vec::new();
+    // let ready_lines = Preprocess(&mut lines)
 
-    for line in lines {
-        let mut line = line.to_string();
-        sanitize_line(&mut line);
-        if line != "" {
-            ready_lines.push(line);
-        }
-    }
+    let lines: Vec<&str> = lines.split("\n").collect();
+    let ready_lines: Vec<String> = preprocess(&lines);
 
     let mut needs_labels: Vec<(CPUInstruction, &str, usize, i8)> = Vec::new();
     let mut opcodes: Vec<u8> = Vec::new();
