@@ -3,7 +3,7 @@ use std::num;
 
 use instructions::*;
 
-fn convert_number(input: &str) -> Option<u16> {
+fn convert_number(input: &str) -> Result<u16, String> {
     let mut convert = input.to_string();
     let mut negative = false;
     if convert.chars().nth(0).unwrap() == '-' {
@@ -28,12 +28,12 @@ fn convert_number(input: &str) -> Option<u16> {
     match result {
         Ok(num) => {
             if negative {
-                Some((0x10000 - (num as u32)) as u16)
+                Ok((0x10000 - (num as u32)) as u16)
             } else {
-                Some(num)
+                Ok(num)
             }
         }
-        Err(_) => None,
+        Err(_) => Err(format!("couldn't convert number: {}", convert)),
     }
 }
 
@@ -44,8 +44,8 @@ fn interpret_ld_instruction(data: &Vec<&str>) -> Result<(CPUInstruction, u16), S
         if data[2].chars().nth(0).unwrap() == 'v' {
             let convert = convert_number(&data[2][1..]);
             match convert {
-                Some(n) => return Ok((CPUInstruction::LD_Vy, (x << 4) | (n << 8))),
-                None => return Err(format!("Unknown register: {}", data[2])),
+                Ok(n) => return Ok((CPUInstruction::LD_Vy, (x << 4) | (n << 8))),
+                Err(_) => return Err(format!("Unknown register: {}", data[2])),
             }
         }
         //LD Vx, *
@@ -63,8 +63,8 @@ fn interpret_ld_instruction(data: &Vec<&str>) -> Result<(CPUInstruction, u16), S
                 let byte: u16;
 
                 match convert_number(&data[2]) {
-                    Some(n) => byte = n & 0x00FF,
-                    None => return Err(format!("Not a number: {}", data[2])),
+                    Ok(n) => byte = n & 0x00FF,
+                    Err(msg) => return Err(msg),
                 }
                 return Ok((CPUInstruction::LD, (x << 8) | byte));
             }
@@ -153,8 +153,8 @@ pub fn interpret_line(data: &Vec<&str>) -> Result<(CPUInstruction, u16, i8), Str
     macro_rules! check_label {
 		($instr:expr, $index:expr) => {
 			match convert_number(data[$index as usize]) {
-				Some(n) => ($instr, n),
-				None    => {
+				Ok(n) => ($instr, n),
+				Err(_) => {
 					label_pos = $index;
 					($instr, 0)
 				},
@@ -166,7 +166,7 @@ pub fn interpret_line(data: &Vec<&str>) -> Result<(CPUInstruction, u16, i8), Str
         "" => (blank, 0), //Skip statements without an instruction
         "cls" => (CLS, 0),
         "ret" => (RET, 0),
-        "sys" => (SYS, convert_number(data[1]).unwrap()),
+        "sys" => (SYS, convert_number(data[1])?),
         "jp" => match data.len() {
             2 => check_label!(JP, 1),
             3 => {
@@ -181,21 +181,21 @@ pub fn interpret_line(data: &Vec<&str>) -> Result<(CPUInstruction, u16, i8), Str
         "call" => check_label!(CALL, 1),
         "se" => {
             if data[2].chars().nth(0).unwrap() != 'v' {
-                (SE, x!() | convert_number(data[2]).unwrap())
+                (SE, x!() | convert_number(data[2])?)
             } else {
                 (SE_Vy, x!() | y!())
             }
         }
         "sne" => {
             if data[2].chars().nth(0).unwrap() != 'v' {
-                (SNE, x!() | convert_number(data[2]).unwrap())
+                (SNE, x!() | convert_number(data[2])?)
             } else {
                 (SNE_Vy, x!() | y!())
             }
         }
         "add" => {
             if data[2].chars().nth(0).unwrap() != 'v' {
-                (ADD, x!() | convert_number(data[2]).unwrap())
+                (ADD, x!() | convert_number(data[2])?)
             } else if data[1] == "i" {
                 (ADD_I, y!() << 4)
             } else {
@@ -209,8 +209,8 @@ pub fn interpret_line(data: &Vec<&str>) -> Result<(CPUInstruction, u16, i8), Str
         "shr" => (SHR, x!()),
         "subn" => (SUBN, x!() | y!()),
         "shl" => (SHL, x!()),
-        "rnd" => (RND, x!() | (convert_number(data[2]).unwrap() & 0xFF)),
-        "drw" => (DRW, x!() | y!() | (convert_number(data[3]).unwrap() & 0xFF)),
+        "rnd" => (RND, x!() | (convert_number(data[2])? & 0xFF)),
+        "drw" => (DRW, x!() | y!() | (convert_number(data[3])? & 0xFF)),
         "skp" => (SKP, x!()),
         "sknp" => (SKNP, x!()),
         "ld" => {
@@ -230,7 +230,7 @@ pub fn interpret_line(data: &Vec<&str>) -> Result<(CPUInstruction, u16, i8), Str
             if width != 8 {
                 return Err(format!("Invalid number width: {}. Expected 8", width));
             }
-            let num = convert_number(data[1]).unwrap();
+            let num = convert_number(data[1])?;
             (db, num)
         }
         _ => return Err(format!("Unknown instruction: \"{}\"", data[0]).to_string()),
