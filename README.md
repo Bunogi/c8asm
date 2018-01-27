@@ -18,6 +18,17 @@ jp wait
 call do_something ; Do cool stuff
 ```
 
+## Preprocessor
+Currently, only replacing variables is supported.
+```asm
+#define x_pos v0
+#define y_pos v1
+
+; Initialize position
+ld $x_pos, 16
+ld $y_pos, 8
+```
+
 ## Embedding data
 To embed data into your executable, use the ```db``` "instruction".
 
