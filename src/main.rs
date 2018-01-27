@@ -1,3 +1,4 @@
+#![feature(nll, entry_or_default)]
 //Command line args
 extern crate clap;
 use clap::{App, Arg};
@@ -12,12 +13,12 @@ use instructions::*;
 mod interpret;
 use interpret::*;
 
-mod preproccessor;
-use preproccessor::preprocess;
+mod preprocessor;
+use preprocessor::preprocess;
 
 fn main() {
     let args = App::new("c8asm")
-        .version("0.0.1")
+        .version("1.1.0")
         .author("Bunogi")
         .arg(
             Arg::with_name("file")
@@ -36,6 +37,11 @@ fn main() {
                 .short("s")
                 .conflicts_with("o"),
         )
+        .arg(
+            Arg::with_name("preprocess only")
+                .help("Only run the preprocessor and output the result to stdout")
+                .short("p"),
+        )
         .about("Assembles Chip-8 programs")
         .get_matches();
 
@@ -50,10 +56,22 @@ fn main() {
     let mut lines = String::new();
     file.read_to_string(&mut lines).unwrap();
 
-    // let ready_lines = Preprocess(&mut lines)
-
     let lines: Vec<&str> = lines.split("\n").collect();
-    let ready_lines: Vec<String> = preprocess(&lines);
+    let preprocessor_result = preprocess(&lines);
+    let ready_lines = match preprocessor_result {
+        Ok(n) => n,
+        Err((mesg, line_num)) => {
+            println!("Error: {}:{}", line_num, mesg);
+            process::exit(1);
+        }
+    };
+
+    if args.is_present("preprocess only") {
+        for out in &ready_lines {
+            println!("{}", out);
+        }
+        process::exit(0);
+    }
 
     let mut needs_labels: Vec<(CPUInstruction, &str, usize, i8)> = Vec::new();
     let mut opcodes: Vec<u8> = Vec::new();

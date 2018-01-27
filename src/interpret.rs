@@ -14,8 +14,7 @@ pub fn sanitize_line(input: &mut String) {
         None => {}
     }
 
-    *input = input.trim();
-    *input = input.to_lowercase();
+    *input = input.trim().to_string().to_lowercase();
 }
 
 fn convert_number(input: &str) -> Option<u16> {
