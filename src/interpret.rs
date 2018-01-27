@@ -14,8 +14,7 @@ pub fn sanitize_line(input: &mut String) {
         None => {}
     }
 
-    input.trim_left();
-    input.trim_right();
+    *input = input.trim();
     *input = input.to_lowercase();
 }
 
