@@ -2,7 +2,19 @@ use std::vec::Vec;
 use std::string::String;
 use std::collections::HashMap;
 
-use interpret::sanitize_line;
+//Returns a string with comments removed, with everything in lowercase
+pub fn sanitize_line(input: &mut String) {
+    while let Some(i) = input.find(',') {
+        input.remove(i);
+    }
+
+    match input.find(';') {
+        Some(i) => *input = input[0..i].to_string(),
+        None => {}
+    }
+
+    *input = input.trim().to_string().to_lowercase();
+}
 
 //Preprocessor should support #define VAL xyz
 pub fn preprocess(input: &Vec<&str>) -> Result<Vec<String>, (String, u32)> {

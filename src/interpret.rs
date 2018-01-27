@@ -3,20 +3,6 @@ use std::num;
 
 use instructions::*;
 
-//Returns a string with comments removed, with everything in lowercase
-pub fn sanitize_line(input: &mut String) {
-    while let Some(i) = input.find(',') {
-        input.remove(i);
-    }
-
-    match input.find(';') {
-        Some(i) => *input = input[0..i].to_string(),
-        None => {}
-    }
-
-    *input = input.trim().to_string().to_lowercase();
-}
-
 fn convert_number(input: &str) -> Option<u16> {
     let mut convert = input.to_string();
     let mut negative = false;
