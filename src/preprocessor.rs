@@ -25,11 +25,36 @@ pub fn preprocess(input: &Vec<&str>) -> Result<Vec<String>, (String, u32)> {
 
     //Find definitions
     for i in 0..output.len() {
-        let current_line = output[i].trim_left();
+        let mut current_line = &mut output[i];
 
-        if current_line.starts_with("#") {
+        let mut split: Vec<String> = current_line
+            .split_whitespace()
+            .map(|s| s.to_string())
+            .collect();
+
+        //Replace variable
+        let mut new: Vec<String> = Vec::with_capacity(split.len());
+        for word in &split {
+            if word.starts_with("$") {
+                let to_check;
+                if word.ends_with(",") {
+                    to_check = &word[1..word.len() - 1];
+                } else {
+                    to_check = &word[1..];
+                }
+                match definitions.get(to_check) {
+                    Some(n) => new.push(n.clone()),
+                    None => return Err((format!("Unknown variable: {}", word), line_num)),
+                }
+            } else {
+                new.push(word.clone());
+            }
+        }
+
+        let check_line = current_line.trim_left();
+        if check_line.starts_with("#") {
             //Preprocessor definition
-            let mut words = current_line.split_whitespace();
+            let mut words = check_line.split_whitespace();
             match &words.next().unwrap()[1..] {
                 "define" => {
                     let name = words.next();
@@ -47,10 +72,10 @@ pub fn preprocess(input: &Vec<&str>) -> Result<Vec<String>, (String, u32)> {
                     ))
                 }
             }
-            if current_line[1..8] == *"define " {
-                let end_name = current_line[9..].find(' ').unwrap() + 9;
-                let name = String::from(&current_line[8..end_name]);
-                let definition = String::from(&current_line[end_name..]);
+            if check_line[1..8] == *"define " {
+                let end_name = check_line[9..].find(' ').unwrap() + 9;
+                let name = String::from(&check_line[8..end_name]);
+                let definition = String::from(&check_line[end_name..]);
                 definitions.insert(name, definition);
             } else {
                 return Err((
@@ -59,45 +84,13 @@ pub fn preprocess(input: &Vec<&str>) -> Result<Vec<String>, (String, u32)> {
                 ));
             }
         }
-        line_num += 1;
-    }
-
-    line_num = 0;
-
-    //Replace keywords
-    for i in 0..output.len() {
-        let mut current_line = &mut output[i];
-
-        let mut split: Vec<String> = current_line
-            .split_whitespace()
-            .map(|s| s.to_string())
-            .collect();
-
-        //Replace variable
-        let mut new: Vec<&String> = Vec::with_capacity(split.len());
-        for word in &split {
-            if word.starts_with("$") {
-                let to_check;
-                if word.ends_with(",") {
-                    to_check = &word[1..word.len() - 1];
-                } else {
-                    to_check = &word[1..];
-                }
-                match definitions.get(to_check) {
-                    Some(n) => new.push(n),
-                    None => return Err((format!("Unknown variable: {}", word), line_num)),
-                }
-            } else {
-                new.push(word);
-            }
-        }
 
         //Remove preprocessor lines
         current_line.clear();
         if new.len() > 0 {
             if !new[0].starts_with("#") {
                 for word in new {
-                    current_line.push_str(word);
+                    current_line.push_str(&word);
                     current_line.push_str(" ");
                 }
             }

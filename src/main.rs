@@ -18,7 +18,7 @@ use preprocessor::preprocess;
 
 fn main() {
     let args = App::new("c8asm")
-        .version("1.1.0")
+        .version("1.1.1")
         .author("Bunogi")
         .arg(
             Arg::with_name("file")
